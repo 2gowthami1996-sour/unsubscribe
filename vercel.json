@@ -1,10 +1,10 @@
 {
   "functions": {
     "api/*.py": {
-      "runtime": "python3.9"
+      "runtime": "vercel-python@0.5.2"
     }
   },
   "routes": [
-    { "src": "/unsubscribe", "dest": "/api/unsubscribe.py" }
+    { "src": "/unsubscribe", "dest": "api/unsubscribe.py" }
   ]
 }
