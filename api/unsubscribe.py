@@ -1,37 +1,43 @@
-from flask import Flask, request, jsonify
-from pymongo import MongoClient
 import os
+from urllib.parse import parse_qs
+from pymongo import MongoClient
+from pymongo.errors import ConnectionFailure
 
-app = Flask(__name__)
+MONGO_URI = os.getenv("MONGO_URI")
+MONGO_DB_NAME = os.getenv("MONGO_DB_NAME")
 
-# Environment variables
-MONGO_URI = os.environ.get("MONGO_URI")
-DB_NAME = os.environ.get("MONGO_DB_NAME")
+def handler(request):
+    # Parse query parameters
+    query = parse_qs(request.query_string.decode())
+    email = query.get('email', [None])[0]
 
-# Connect safely
-try:
-    client = MongoClient(MONGO_URI)
-    db = client[DB_NAME]
-    unsubscribed = db.get_collection("unsubscribed_emails")
-except Exception as e:
-    print(f"MongoDB connection failed: {e}")
-    unsubscribed = None
-
-@app.route("/unsubscribe")
-def unsubscribe():
-    if unsubscribed is None:
-        return "Error: Cannot connect to database.", 500
-
-    email = request.args.get("email")
     if not email:
-        return "Error: No email provided.", 400
+        return {
+            "statusCode": 400,
+            "body": "⚠ Missing email parameter!"
+        }
 
+    # Connect to MongoDB
     try:
-        unsubscribed.update_one(
-            {"email": email},
-            {"$set": {"unsubscribed": True}},
-            upsert=True
-        )
-        return f"{email} has been unsubscribed successfully!"
-    except Exception as e:
-        return f"Database error: {e}", 500
+        client = MongoClient(MONGO_URI)
+        db = client[MONGO_DB_NAME]
+        collection = db.cleaned_contacts
+    except ConnectionFailure as e:
+        return {
+            "statusCode": 500,
+            "body": f"❌ Database connection error: {e}"
+        }
+
+    # Remove or mark unsubscribed
+    result = collection.update_one({"work_emails": {"$regex": email}}, {"$set": {"unsubscribed": True}})
+
+    if result.matched_count > 0:
+        return {
+            "statusCode": 200,
+            "body": f"{email} has been unsubscribed successfully!"
+        }
+    else:
+        return {
+            "statusCode": 404,
+            "body": f"No matching email found for {email}."
+        }
