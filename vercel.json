@@ -9,7 +9,6 @@
   "routes": [
     {
       "src": "/unsubscribe",
-      "methods": ["GET"],
       "dest": "api/unsubscribe.py"
     }
   ]
