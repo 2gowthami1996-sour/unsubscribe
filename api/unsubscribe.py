@@ -5,11 +5,10 @@ import os
 
 app = Flask(__name__)
 
-# MongoDB connection details
 MONGO_URI = os.environ.get("MONGO_URI")
 MONGO_DB_NAME = os.environ.get("MONGO_DB_NAME")
 
-# Simple HTML template for confirmation page
+# Simple inline HTML template
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -44,9 +43,15 @@ HTML_TEMPLATE = """
             margin-top: 10px;
             font-size: 16px;
         }
-        .success { color: #27ae60; }
-        .warning { color: #e67e22; }
-        .error { color: #e74c3c; }
+        .success {
+            color: #27ae60;
+        }
+        .warning {
+            color: #e67e22;
+        }
+        .error {
+            color: #e74c3c;
+        }
     </style>
 </head>
 <body>
@@ -60,7 +65,7 @@ HTML_TEMPLATE = """
 
 @app.route("/unsubscribe", methods=["GET"])
 def unsubscribe():
-    email = unquote(request.args.get("email", "")).strip().lower()
+    email = unquote(request.args.get("email", "")).strip()
 
     if not email:
         return render_template_string(
@@ -72,37 +77,30 @@ def unsubscribe():
         ), 400
 
     try:
-        # Connect to MongoDB
         client = MongoClient(MONGO_URI)
         db = client[MONGO_DB_NAME]
-        unsubscribed_col = db.unsubscribed_emails
+        result = db.cleaned_contacts.update_one(
+            {"work_emails": email},
+            {"$set": {"unsubscribed": True}}
+        )
+        client.close()
 
-        # Check if email already unsubscribed
-        existing = unsubscribed_col.find_one({"email": email})
-        if existing:
-            client.close()
+        if result.matched_count:
+            return render_template_string(
+                HTML_TEMPLATE,
+                status_class="success",
+                status_icon="✅",
+                status_title="Unsubscribed Successfully!",
+                message=f"{email} has been removed from our mailing list."
+            ), 200
+        else:
             return render_template_string(
                 HTML_TEMPLATE,
                 status_class="warning",
                 status_icon="⚠️",
-                status_title="Already Unsubscribed",
-                message=f"{email} is already in our unsubscribed list."
+                status_title="Email Not Found",
+                message=f"We couldn't find {email} in our contact list."
             ), 200
-
-        # Insert new unsubscribed email
-        unsubscribed_col.insert_one({
-            "email": email,
-            "unsubscribed_at": db.command("serverStatus")["localTime"]
-        })
-
-        client.close()
-        return render_template_string(
-            HTML_TEMPLATE,
-            status_class="success",
-            status_icon="✅",
-            status_title="Unsubscribed Successfully!",
-            message=f"{email} has been removed from our mailing list."
-        ), 200
 
     except Exception as e:
         return render_template_string(
